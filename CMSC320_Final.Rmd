@@ -1,0 +1,379 @@
+---
+title: "cmsc320 final project"
+author: "Shiyuan duan, Wenrui Tang"
+date: "5/21/2019"
+output:
+  html_document:
+    toc: true
+    toc_depth: 2
+
+---
+## Including libraries
+
+```{r include_lib,message=FALSE}
+library(tidyverse)
+```
+Header 1
+
+## Introduction
+There are almost millions of people commited suicide annually and millions of families are destroied. Controlling suicide rate has long been a huge problem that humans have to solve. As undergrauate students in the greatest university and the greatest course we are here to help. Our goal is to use the data collected and analyze what is causing people to commit suicide. We are using this data because this is a large enough data frame for us to do analysis on.
+
+We are also interested in some of the stereotypes. For example, typically people believe that teenagers are more likely to commit suicide. Some website support this but some do not. (https://afsp.org/about-suicide/suicide-statistics/)
+
+Also a common stereotype is that people living in country with low gdp are more likely to commit suicide. In this report we are also going to test if this stereotype is true. (https://www.ncbi.nlm.nih.gov/pmc/articles/PMC5153284/)
+
+This report is a tutorial report on analysing suicide rate world widely. In this tutorial we will explore if global sucide rate is increasing or not? Also we are interested in which factor is affecting the suicide rate the most? Is it true that people like teenagers are more likely to commit suicide.
+
+## Identifying problem
+
+The problem we are trying to identify here is that what is the most significant factor causing people in various age range to commit suicide.
+
+Also there are some rumors like teenagers are more likely to commit suicide. Here we have this awesome data set we can then do some analysis to test if some of the stereotypes are true.
+
+## Collecting the data
+Dataset can be downloaded from: https://www.kaggle.com/russellyates88/suicide-rates-overview-1985-to-2016/downloads/suicide-rates-overview-1985-to-2016.zip/1
+
+We put the downloaded file in the current directory and read it with read_csv. Let's take a look at the actual dataset and it's attributes first and see how we can approach to the problem we are trying to solve.
+
+```{r read_data, message=FALSE}
+sr_data <- read_csv("suicide_rate.csv")
+sr_data
+```
+
+After gathering the data we can start doing something more specific. For example if we want to select a colum from this data set we can do something like this:
+
+```{r select}
+sr_data %>%
+  select("suicides_no","year")
+```
+
+## Doing basic analysis on data
+
+After including the dataset, we can start doing some basic analysis by manipulating the dataframe with several basic functions. For example if we want to see how many people in the US has commited suicide in the past, we can do something like this:
+
+```{r total_US}
+total_no_per_year <- sr_data %>%
+  filter(country == "United States") %>%
+  group_by(year) %>%
+  summarize(total_number = sum(suicides_no))
+total_no_per_year
+```
+
+We can visulize this better by plotting it
+
+```{r big_plot}
+total_no_per_year %>% 
+  slice(-c(1:10)) %>%
+  ggplot(aes(x=factor(year), y=total_number)) +
+  geom_point(aes(color = total_number))
+```
+Here is an interesting pattern: suicide rate started increasing sharply after 2000. 
+
+We can also do an analysis on this data world widely
+
+```{r 9}
+total_no_per_year<-sr_data %>% group_by(year) %>%
+  summarize(total_no = sum(suicides_no))
+total_no_per_year %>%
+  ggplot(aes(x=year,y=total_no)) +
+  geom_point() +
+  geom_smooth(method = lm)
+```
+
+We can see that the total number of suicides world-wide is increasing. This should ring the bell, we have to findout why and pervent from more suicides happening. To better understand what is causing the suicide rate is increasing, we have to do hypthesis testings
+
+
+## Statistic analysis & Hypothesis testing
+
+```{r tidy_suicide}
+   library(stringr)
+   suicide_rate_df <- sr_data %>%
+     mutate(n_male = str_count(sex, 
+                               "male"))%>% 
+     mutate(n_fem = str_count(sex,
+                              "female")) %>%     
+     mutate(n_participants = n_male + n_fem) %>%
+
+     select(country,year,sex, age,n_male, n_fem, n_participants,suicides_no,`suicides/100k pop`)
+     
+    slice(suicide_rate_df, 1:10)
+```
+
+Data analysis is a crucial step. First, let's start with the most basic factor. That is the relationship between gender and suicide rates. Then we want to know is that if the ratio of men to women is a key factor.
+
+```{r plot_male}
+suicide_rate_df %>%
+
+  group_by(suicide_rate_df$year) %>%
+  mutate(pct_male = sum(n_male) / sum(n_participants)) %>%
+  ggplot(aes(x=(year), y=(pct_male))) + 
+  geom_point() +
+  geom_smooth(method = 'lm') +
+  scale_y_continuous(limits=c(0,1))+
+  scale_x_continuous(limits=c(1980,2020))+
+  
+  labs(title = "Percentage of Male Participants", y = "%Male", x = "Year")
+```
+
+```{r plot_female}
+suicide_rate_df %>%
+
+  group_by(suicide_rate_df$year) %>%
+  mutate(pct_fem = sum(n_fem) / sum(n_participants)) %>%
+  ggplot(aes(x=(year), y=(pct_fem))) + 
+  geom_point() +
+  geom_smooth(method = 'lm') +
+  scale_y_continuous(limits=c(0,1))+
+  scale_x_continuous(limits=c(1980,2020))+
+  
+  labs(title = "Percentage of Female Participants", y = "%Female", x = "Year")
+```
+
+From the plots above, from 1985 to 2017, the suicide rate of female and male stays the same.
+
+Next, we are interested in the number of suicide people from 1985 to 2017.
+
+```{r violin_p}
+suicide_rate_df %>%
+  ggplot(aes(x = year, y = suicides_no)) +
+  geom_point() +
+  geom_smooth(method = 'lm') +
+  labs(x = "Date", y = "Number of Suicide", title= "Suicide Over Time")
+  
+```
+
+Well, we did not get a lot of information from the plot above.To make the data even more interesting, we can isolate major countries to see how they compare.
+
+
+```{r city_regressions}
+suicide_rate_df %>%
+  group_by(country, year) %>%
+  mutate(total_suicide = sum(suicides_no)) %>%
+  filter(country == "Braizl" |
+         country == "France" |
+         country == "Japan" |
+         country == "Italy" |
+         country == "Mexico" | 
+         country == "United States" | 
+         country == "Canada" ) %>%
+  ggplot(aes(x = year, y = total_suicide,   
+             color = country)) +
+  geom_point() +
+  geom_smooth(method = 'lm') +
+  labs(x = "Year", y = "Total Number of suicide", title = "Major Country suicide Totals Over the Years")
+```
+
+As we can see from the data the only three countries that seem to have an increasing trend are United States, Mexico and Japan. Suicide in Japan has become a major national social issue. Japan has a relatively high suicide rate compared to other countries. On the other hand, France's total number of sucide each year seems to be trending downward. 
+
+```{r key_city_df}
+country_suicide_rate_df <- suicide_rate_df %>%  
+  group_by(country, year) %>%
+  mutate(total_suicide = sum(suicides_no)) %>%
+  ungroup() %>%
+  filter(country == "Braizl" |
+         country == "France" |
+         country == "Japan" |
+         country == "Italy" |
+         country == "Mexico" | 
+         country == "United States" | 
+         country == "Canada") 
+  
+slice(country_suicide_rate_df, 1:10) 
+```
+
+
+Let's see if there's a direct correlation between dates and suicides, based on the data we have. Let's look specifically at the countries we've already mentioned. The first step is to filter the data for these countries.
+
+Next, let's make a violin plot to help us visualize where the number of suicides might fall.
+
+```{r violin_plot}
+country_suicide_rate_df  %>%
+ group_by(country, year) %>%
+ mutate(avg_suicide_count=mean(suicides_no)) %>%
+ ungroup() %>%
+ ggplot(aes(x=factor(year), y=suicides_no)) +
+ geom_violin(trim=FALSE, fill="gray")+
+ labs(title="Total suicide Over Time",
+ x="Year", y = "number of suicide")+
+ geom_boxplot(width=0.5)+
+ geom_point(aes(x=factor(year), y = avg_suicide_count)) +
+ theme_classic()
+```
+
+Finally, we made a t-test to show whether there was a relationship between year and the number of suicides with more direct data.
+
+Null hypothesis: there is relationship between sucides and years.
+Alternative hypothesis: there is no relationship between sucides ad years.
+
+```{r tidy_data}
+library(broom)
+tidy_data <- lm(year~suicides_no, country_suicide_rate_df) %>%
+ tidy()
+tidy_data
+```
+
+Since the p-value < 0.05, It reject the null hypothesis so that we can conclude that there is no relationship between sucides and years.
+
+
+## Machine learning
+
+## Testing relationship between year and suicide no
+After doing the hypothesis testing we found out that factors like country and age are the factors causing total suicide no world-wide to increase. In this section we want to explore exactly by how much each factor is affecting the worldwide suicide rate. First we want to see how is the factor: 'year' affecting the total_no_of_sucide. In another word, we want to see by how much is suicide number increasing per year. We can put the data into a linear fit model:
+
+```{r growth_per_year}
+library(broom)
+totalno_per_year_fit <- lm(total_no_per_year$total_no ~ total_no_per_year$year)
+tidy(totalno_per_year_fit)
+```
+
+After fitting the model we have to see how good is our model. This can be done by plotting the residule and years.
+
+```{r st_residule, message=FALSE}
+augmented_no_per_year_fit <- totalno_per_year_fit %>%
+  augment()
+
+augmented_no_per_year_fit %>% 
+  ggplot(aes(x=total_no_per_year.year, y=.resid)) +
+  geom_violin() +
+  geom_smooth(method = lm)
+```
+
+The model is good enough since most of residues are centered at 0.
+
+We can see that total number of suicide poplation is increasing at a rate of 1522 people per year. This is really daunting. We have to figure out exactly which factor is affecting the trend. 
+First we take a look at how is the factor country affecting the trend. 
+
+
+## Testing relationship between country and suicide no
+To do this problem we have to include country in our dataframe. Also we can no longer use the total number of population since population between countries vary be alot.
+
+```{r country_in_df}
+df_with_country <- sr_data %>%
+  group_by(year,country) %>%
+  summarize(mean_no = mean(`suicides/100k pop`)) %>%
+  arrange(desc(mean_no))
+df_with_country
+```
+
+we can visulize this by doing:
+
+```{r 3}
+df_with_country %>%
+  ggplot(aes(x=country, y=mean_no)) +
+  geom_point(aes(color = mean_no))
+```
+
+After modeling the dataset we can start doing machine learning analysis. This time we are useing 2 factors so we are fitting our data in a multiple linear regressing model.
+
+```{r mult_lr}
+fit_wit_country <- lm(df_with_country$mean_no ~ df_with_country$year*df_with_country$country)
+tidy(fit_wit_country)
+augmented_fit_with_country <- augment(fit_wit_country)
+```
+
+Test if the model good enough
+
+```{r 4}
+augmented_fit_with_country %>%
+  ggplot(aes(x=df_with_country.year, y=.resid)) +
+  geom_point()+
+  geom_smooth()
+```
+
+From this dataframe we can see that which country is contributing how much to the trend. We can arrange this df
+
+```{r arrage_fit_df}
+tidy(fit_wit_country) %>%
+  slice(-2,-1) %>%
+  arrange(desc(estimate))
+```
+
+This is ranking of countries contributed to the total number of suicides the most. These country should reflect on why is this happenning. This could be caused by gdp, education, goverment and etc.
+
+
+## Testing how gdp is affecting the suicide rate
+Since we found out that county is a big factor affecting the central tendency, it is reasonalbe to suspect that gdp might also be a factor. Therefore we can do a linear regression model to analyze how is gdp contributing to the average suicide rate. Lets first model the data set. We want a model that contains countries, average gdp and average suicide rate.
+
+```{r 5}
+country_mean_suiciderate<-df_with_country %>%
+  group_by(country) %>%
+  summarize("mean_suicide_rate" = mean(mean_no))
+
+country_mean_gdp <- sr_data %>%
+  group_by(country) %>%
+  summarize(mean_gdp = mean(`gdp_for_year ($)`))
+
+suicide_rate_gdp<-country_mean_gdp %>%
+  full_join(country_mean_suiciderate, by="country")
+suicide_rate_gdp
+
+```
+
+After modeling the data frame we can start doing linear regression analysis. (We used join here, full join is a good method to use when we are trying to link 2 lists)
+
+```{r 6}
+fit_with_gdp <- lm(suicide_rate_gdp$mean_suicide_rate ~ suicide_rate_gdp$mean_gdp)
+tidy(fit_with_gdp)
+```
+
+We can visulize this by graphing:
+
+```{r 7}
+suicide_rate_gdp %>% 
+  ggplot(aes(x=mean_gdp,y=mean_suicide_rate)) +
+  geom_point(aes(color = mean_suicide_rate))
+```
+
+From the graph we can see that countries with lower gdp does have more incidents of people commiting suicides. However besed on the linear regression model we can see that gdp acutually contribute little to the suicide rate of a country. This means that suicides rate acutally does not really depend on countries gdp.
+
+
+## Testing how is age affecting suicide rate
+
+Another steretype is that teenagers(15-24) are more likely to commit suicides. However some website(https://afsp.org/about-suicide/suicide-statistics/) claims that teenagers are actually less likely to commit suicide. Here we have the awesome data, lets just test on our dataset and analyze is the stereotype true or is this website true.
+After doing some analysis on countries, now we can do the same on age and see how is age effecting the totalnumber of suicides.
+
+Again we first have to model the dataframe from the original data frame:
+
+```{r 1}
+df_with_age <- sr_data %>%
+  group_by(year,age) %>%
+  summarize(sum_no = sum(suicides_no)) %>%
+  arrange(desc(sum_no))
+df_with_age
+```
+```{r 10}
+df_with_age %>%
+  ggplot(aes(x=age,y=sum_no)) +
+  geom_point(aes(colour = factor(age))) 
+```
+
+Here we can see that 35-54 years-old people are most likely to commit suicide. Now we use a multiple linear regression model to analyze this trend numerically.
+
+```{r fit_with_age}
+fit_with_age <- lm(df_with_age$sum_no ~ df_with_age$year*df_with_age$age)
+tidy(fit_with_age) %>% 
+  slice(8:13) %>% 
+  arrange(desc(estimate))
+```
+
+From this we can see that people in age range 35-54 contribute most to the model. This means that people in this age range are mostly likely to commit suicide. Our earlier stereotype stateing that teenagers are more likely to commit suicide is then falsified. One interesting fact is that, despite we hear teens commiting suicide from the news all the time, people in the rage of 5-14 years old contribute negativly to the model. This means that 5-14years old people are least likely to commit suicide. We are doing a good job of protecting our childrens!
+
+## Some small reflection
+
+Through our project, we learned some basic techniques for collecting, tidy, organizing and analyzing data. There are data sets that not seem to glower as a good example to analyze as predictors, or to study residuals and other statistics. However, we believe we can present most of our ideas and data visualization.
+
+## Summary
+
+Firstly, suicide rate varies greatly in different countries. However when we test gdp we see that gpd contribute little to the total number of suicides. It is difficult to figure out exactly why countries with most suicide rate are like that because this differnce can be cause by a lot of factors such as cultral problems, education, government and etc. 
+
+What we have to learn from this report is that countries that listed earlier should take this problem seriously to prevent people from commiting suicides and stop blaming low gdp as the reason of why people commit suicide. People living in poor countries can also be happy.
+
+Secondly, despite news like to report incidents of teens commiting suicides, people in 35-54 years old are more likely to commit suicide. This also can be caused by various reasons. Social presser may be a key factor. We have to start considering if the society have been putting too much presser on mid-age people. Teenagers however, are more less likely to commit suicide. People in 5-14 age range even have neagtive contribution to the model. This indicate that humans are doing a decent job of protecting our children and we have to keep it this way.
+
+Therefore to summarize, difference in country and age are the main factors affecting the suicide rate. If humans want to control a low rate of suicides, it is a good idea to start examing thoes contries listed earlier more thoughtfully and also people should put more focus on analyzing people between age 35-54, because they contribute the most to suicide rate.
+
+## Additional notes
+
+Data prepareation, basic manimulation, all machine learning and summary is done by Shiyuan Duan
+
+All the hypothesis testing and introduction part is done by Wenrui Tang
